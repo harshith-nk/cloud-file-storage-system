@@ -4,7 +4,7 @@ import Auth from './components/Auth';
 import './App.css';
 import Footer from './components/Footer';
 
-const API_URL = 'http://localhost:5000/api/files';
+const API_URL = `${import.meta.env.VITE_API_BASE_URL}/api/files`;
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 
 function CloudIcon() {
@@ -12,7 +12,7 @@ function CloudIcon() {
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
     </svg>
-  );
+  ); 
 }
 
 function UploadIcon() {
