@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import axios from 'axios';
 import Footer from './Footer'; 
-import './Auth.css';
+import './auth.css';
 
 const API_URL = `${import.meta.env.VITE_API_BASE_URL}/api/auth`;
 
