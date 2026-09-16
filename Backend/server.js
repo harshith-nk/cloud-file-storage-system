@@ -14,7 +14,7 @@ app.use(cors({
     'http://localhost:5173',
     'https://cloud-file-storage-xcca.onrender.com'
   ],
-  methods: ['GET', 'POST', 'DELETE'],
+  methods: ['GET', 'POST', 'DELETE','PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 

@@ -346,6 +346,39 @@
   box-shadow: 0 4px 12px rgba(220, 38, 38, 0.35);
 }
 
+.btn-rename {
+  background: var(--accent);
+  border: none;
+  color: #fff;
+  padding: 7px 14px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.btn-rename:hover {
+  filter: brightness(1.1);
+  transform: scale(1.08);
+  box-shadow: 0 4px 12px rgba(79, 124, 255, 0.35);
+}
+
+.rename-input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  font-size: 14px;
+  margin: 12px 0;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.rename-input:focus {
+  border-color: var(--accent);
+}
+
 .toast {
   position: fixed;
   bottom: 24px;

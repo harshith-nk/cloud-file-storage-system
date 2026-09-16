@@ -67,6 +67,9 @@ function App() {
   const [files, setFiles] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [fileToDelete, setFileToDelete] = useState(null);
+  const [fileToRename, setFileToRename] = useState(null);
+  const [renameValue, setRenameValue] = useState('');
+  const [stats, setStats] = useState(null);
 
   const abortControllerRef = useRef(null);
 
@@ -94,19 +97,43 @@ function App() {
   setTimeout(() => setToast(null), 3000);
 };
 
-  const fetchFiles = async () => {
-    try {
-      const response = await axios.get(API_URL, authHeaders());
-      setFiles(response.data);
-    } catch (err) {
-      console.error('Failed to fetch files:', err);
-      if (err.response?.status === 401) handleLogout();
-    }
-  };
+const fetchFiles = async (search = '') => {
+  try {
+    const url = search ? `${API_URL}?search=${encodeURIComponent(search)}` : API_URL;
+    const response = await axios.get(url, authHeaders());
+    setFiles(response.data);
+  } catch (err) {
+    console.error('Failed to fetch files:', err);
+    if (err.response?.status === 401) handleLogout();
+  }
+};  
 
-  useEffect(() => {
-    if (token) fetchFiles();
-  }, [token]);
+const fetchStats = async () => {
+  try {
+    const response = await axios.get(`${API_URL}/stats`, authHeaders());
+    setStats(response.data);
+  } catch (err) {
+    console.error('Failed to fetch stats:', err);
+  }
+};
+
+useEffect(() => {
+  if (token) {
+    fetchFiles();
+    fetchStats();
+  }
+}, [token]);
+
+// Debounced server-side search — waits 400ms after typing stops before hitting the backend
+useEffect(() => {
+  if (!token) return;
+  const timer = setTimeout(() => {
+    fetchFiles(searchQuery);
+  }, 400);
+  return () => clearTimeout(timer);
+}, [searchQuery, token]);  
+
+
 
   const handleFileChange = (e) => {
   const files = Array.from(e.target.files);
@@ -267,6 +294,21 @@ setSelectedFiles([]);
   }
 }
 
+const handleRename = async (id, newName) => {
+  try {
+    const response = await axios.patch(
+      `${API_URL}/${id}/rename`,
+      { newName },
+      authHeaders()
+    );
+    fetchFiles();
+    showToast(`Renamed to "${response.data.file.originalName}"`, 'success');
+  } catch (err) {
+    console.error('Rename failed:', err);
+    showToast('Failed to rename file', 'error');
+  }
+};
+
   const formatSize = (bytes) => {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -284,9 +326,7 @@ setSelectedFiles([]);
   };
 
   const totalSize = files.reduce((sum, f) => sum + f.size, 0);
-  const filteredFiles = files.filter((f) =>
-  f.originalName.toLowerCase().includes(searchQuery.toLowerCase())
-);
+  
 
   if (!token) {
     return <Auth onLogin={handleLogin} />;
@@ -364,10 +404,11 @@ setSelectedFiles([]);
 
         <div className="docs">
           <p className="docs-eyebrow">
-  {files.length === 0
+  {!stats || stats.totalFiles === 0
     ? 'No files uploaded'
-    : `${files.length} file${files.length !== 1 ? 's' : ''} · ${formatSize(totalSize)} used`}
+    : `${stats.totalFiles} file${stats.totalFiles !== 1 ? 's' : ''} · ${formatSize(stats.totalSize)} used · average ${formatSize(stats.avgSize)} · largest ${formatSize(stats.maxSize)}`}
 </p>
+  
 <h1 className="docs-title">Your documents</h1>
 
 {files.length > 0 && (
@@ -390,11 +431,11 @@ setSelectedFiles([]);
 
 {files.length === 0 ? (
   <div className="docs-empty">No documents yet — your first upload will appear here.</div>
-) : filteredFiles.length === 0 ? (
+) : files.length === 0 ? (
   <div className="docs-empty">No documents match "{searchQuery}"</div>
 ) : (
   <ul className="docs-list">
-    {filteredFiles.map((file) => (
+    {files.map((file) => (
                 <li className="docs-row" key={file._id}>
                   <div className="docs-file-icon"><FileIcon /></div>
                   <div className="docs-info">
@@ -404,12 +445,28 @@ setSelectedFiles([]);
                     </div>
                   </div>
                   <span className="docs-tag">{getExtTag(file.originalName)}</span>
+                  
                   <div className="docs-actions">
-                    <button className="btn-download" onClick={() => handleDownload(file._id)}>
-                      Download
-                    </button>
-                    <button className="btn-delete" onClick={() => setFileToDelete(file)}>Delete</button>
-                  </div>
+  <button className="btn-download" onClick={() => handleDownload(file._id)}>
+    Download
+  </button>
+  <button
+    className="btn-rename"
+    onClick={() => {
+      setFileToRename(file);
+      setRenameValue(file.originalName);
+    }}
+  >
+    Rename
+  </button>
+  <button className="btn-delete" onClick={() => setFileToDelete(file)}>Delete</button>
+</div>
+                  
+                  
+                  
+                  
+                  
+                  
                 </li>
               ))}
             </ul>
@@ -443,6 +500,41 @@ setSelectedFiles([]);
           }}
         >
           Delete
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
+  {fileToRename && (
+  <div className="modal-overlay">
+    <div className="delete-modal">
+      <h2>Rename file</h2>
+
+      <input
+        type="text"
+        className="rename-input"
+        value={renameValue}
+        onChange={(e) => setRenameValue(e.target.value)}
+        autoFocus
+      />
+
+      <div className="modal-actions">
+        <button
+          className="modal-cancel"
+          onClick={() => setFileToRename(null)}
+        >
+          Cancel
+        </button>
+
+        <button
+          className="modal-delete"
+          onClick={() => {
+            handleRename(fileToRename._id, renameValue.trim());
+            setFileToRename(null);
+          }}
+        >
+          Save
         </button>
       </div>
     </div>

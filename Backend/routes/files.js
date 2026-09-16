@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const express = require('express');
 const multer = require('multer');
 const { PutObjectCommand, GetObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
@@ -132,14 +133,113 @@ router.get('/download/:id', authMiddleware, async (req, res) => {
   }
 });
 
+
 // GET /api/files
 router.get('/', authMiddleware, async (req, res) => {
   try {
-    const files = await File.find({ userId: req.userId }).sort({ uploadDate: -1 });
+    const { search, minSize, maxSize, type } = req.query;
+
+    const query = { userId: req.userId };
+
+    // $regex — partial, case-insensitive filename search
+    if (search) {
+      query.originalName = { $regex: search, $options: 'i' };
+    }
+
+    // $gt / $lt — filter by file size range (bytes)
+    if (minSize || maxSize) {
+      query.size = {};
+      if (minSize) query.size.$gt = Number(minSize);
+      if (maxSize) query.size.$lt = Number(maxSize);
+    }
+
+    // $in — filter by one or more MIME types (e.g. type=application/pdf,image/png)
+    if (type) {
+      query.fileType = { $in: type.split(',').map((t) => t.trim()) };
+    }
+
+    const files = await File.find(query).sort({ uploadDate: -1 });
     res.json(files);
   } catch (err) {
     console.error('List files error:', err);
     res.status(500).json({ error: 'Failed to fetch files' });
+  }
+});
+
+// GET /api/files/stats — total storage used + file count, computed by MongoDB
+router.get('/stats', authMiddleware, async (req, res) => {
+  try {
+    const result = await File.aggregate([
+      { $match: { userId: new mongoose.Types.ObjectId(req.userId) } },
+      {
+        $group: {
+          _id: null,
+          totalSize: { $sum: '$size' },
+          totalFiles: { $sum: 1 },
+          avgSize: { $avg: '$size' },
+          maxSize: { $max: '$size' },
+          minSize: { $min: '$size' },
+        },
+      },
+    ]);
+
+    const stats = result[0] || {
+      totalSize: 0, totalFiles: 0, avgSize: 0, maxSize: 0, minSize: 0,
+    };
+
+    res.json(stats);
+  } catch (err) {
+    console.error('Stats error:', err);
+    res.status(500).json({ error: 'Failed to compute stats' });
+  }
+});
+
+// PATCH /api/files/:id/rename
+router.patch('/:id/rename', authMiddleware, async (req, res) => {
+  try {
+    const { newName } = req.body;
+
+    if (!newName || !newName.trim()) {
+      return res.status(400).json({ error: 'New name is required' });
+    }
+
+    const file = await File.findOne({ _id: req.params.id, userId: req.userId });
+
+    if (!file) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+
+    let finalName = newName.trim();
+
+    // Same duplicate-check pattern as upload
+    const nameParts = finalName.split('.');
+    const ext = nameParts.length > 1 ? '.' + nameParts.pop() : '';
+    const baseName = nameParts.join('.');
+    let counter = 1;
+
+    let nameExists = await File.findOne({
+      userId: req.userId,
+      originalName: finalName,
+      _id: { $ne: file._id }, // ignore the file being renamed itself
+    });
+
+    while (nameExists) {
+      finalName = `${baseName}(${counter})${ext}`;
+      nameExists = await File.findOne({
+        userId: req.userId,
+        originalName: finalName,
+        _id: { $ne: file._id },
+      });
+      counter++;
+    }
+
+    file.originalName = finalName;
+    await file.save();
+
+    res.json({ message: 'File renamed successfully', file });
+  } catch (err) {
+    console.error('Rename error:', err);
+    res.status(500).json({ error: 'Failed to rename file' });
   }
 });
 
